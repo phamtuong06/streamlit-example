@@ -1,40 +1,82 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+import matplotlib.pyplot as plt
 
-"""
-# Welcome to Streamlit!
+# To set a webpage title, header and subtitle
+st.set_page_config(page_title="Movies analysis", layout="wide")
+st.header("Interactive Dashboard")
+st.subheader("Interact with this dashboard using the widgets on the sidebar")
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# Read in the file
+movies_data = pd.read_csv("https://raw.githubusercontent.com/nv-thang/Data-Visualization-Course/main/movies.csv")
+movies_data.info()
+movies_data.duplicated()
+movies_data.count()
+movies_data.dropna()
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+# Creating sidebar widget filters from movies dataset
+year_list = movies_data["year"].unique().tolist()
+score_rating = movies_data["score"].unique().tolist()
+genre_list = movies_data["genre"].unique().tolist()
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+# Add the filters. Every widget goes in here
+with st.sidebar:
+    st.write("Select a range on the slider (it represents movie score) "
+             "to view the total number of movies in a genre that falls within that range")
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
+    # Create a slider to hold user scores
+    new_score_rating = st.slider(label="Choose a value:",
+                                 min_value=1.0,
+                                 max_value=10.0,
+                                 value=(3.0, 4.0))
 
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
+    st.write("Select your preferred genre(s) and year to view the movies "
+             "released that year and on that genre")
 
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
+    # Create a multiselect option that holds genre
+    new_genre_list = st.multiselect("Chooose Genre:",
+                                    genre_list,
+                                    default=["Animation", "Horror", "Fantasy", "Romance"])
 
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+    # Create a select box option tha holds all unique years
+    year = st.selectbox("Choose a year", year_list, 0)
+
+# Configure the slider widget for interactivity
+score_info = movies_data["score"].between(*new_score_rating)
+
+# Configure the select box and multiselect widget for interactivity
+new_genre_year = (movies_data["genre"].isin(new_genre_list)) & (movies_data["year"] == year)
+
+# VISUALIZATION SECTION
+# Group the columns needed for visualizations
+col1, col2 = st.columns([2, 3])
+with col1:
+    st.write("""#### Lists of movies filtered by year and Genre """)
+    dataframe_genre_year = movies_data[new_genre_year].groupby(["name", "genre"])["year"].sum()
+    dataframe_genre_year = dataframe_genre_year.reset_index()
+    st.table(dataframe_genre_year)
+
+with col2:
+    st.write("""#### User score of movies and their genre """)
+    rating_count_year = movies_data[score_info].groupby("genre")["score"].count()
+    rating_count_year = rating_count_year.reset_index()
+    figpx = px.line(rating_count_year, x="genre", y="score")
+    figpx.update_xaxes(showgrid=True, gridcolor='white', gridwidth=1)
+    figpx.update_yaxes(showgrid=True, gridcolor='white', gridwidth=1)
+    figpx.update_layout(width=650, plot_bgcolor='#202324')
+    st.plotly_chart(figpx)
+# Creating a bar graph with matplotlib
+st.write(""" Average Movie Budget, Grouped by Genre """)
+avg_budget = movies_data.groupby("genre")["budget"].mean().round()
+avg_budget = avg_budget.reset_index()
+genre = avg_budget["genre"]
+avg_bud = avg_budget["budget"]
+
+fig = plt.figure(figsize=(19, 10))
+
+plt.bar(genre, avg_bud, color="maroon")
+plt.xlabel("genre")
+plt.ylabel("budget")
+plt.title("Matplotlib Bar Chart Showing The Average Budget Of Movies In Each Genre")
+st.pyplot(fig)
